@@ -739,24 +739,24 @@
 					<data variable="tw_multirom_enable_kmsg_logging"/>
 				</listitem>
 -				<listitem name="Enable No-KEXEC Workaround">
-					<data variable="tw_multirom_allow_nkk71_nokexec"/>
+					<data variable="tw_multirom_no_kexec"/>
 				</listitem>
 			</listbox>
 
 			<action>
-				<condition var1="tw_multirom_allow_nkk71_nokexec_na"/>
-				<condition var1="tw_multirom_allow_nkk71_nokexec" op="!=" var2="0"/>
+				<condition var1="tw_multirom_no_kexec_na"/>
+				<condition var1="tw_multirom_no_kexec" op="!=" var2="0"/>
 				<actions>
-					<action function="set">tw_multirom_allow_nkk71_nokexec=0</action>
-					<action function="overlay">multirom_nokexec_not_implemented</action>
+					<action function="set">tw_multirom_no_kexec=0</action>
+					<action function="overlay">multirom_no_kexec_not_implemented</action>
 				</actions>
 			</action>
 
 			<button style="button_quarter_width">
-				<condition var1="tw_multirom_allow_nkk71_nokexec" op="!=" var2="0"/>
+				<condition var1="tw_multirom_no_kexec" op="!=" var2="0"/>
 				<placement x="%tab4_col4_x%" y="%row20_y%"/> <!-- ideally (%row19a_y%+%row20_y%/2 -->
 				<text>ADV</text>
-				<action function="overlay">multirom_nokexec_settings</action>
+				<action function="overlay">multirom_no_kexec_settings</action>
 			</button>
 
 			<text style="text_m_accent">
@@ -796,8 +796,8 @@
 			</action>
 		</page>
 
-<!-- beg of nkk71 nokexec overlays -->
-		<page name="multirom_nokexec_not_implemented">
+<!-- beg of multirom no_kexec overlays -->
+		<page name="multirom_no_kexec_not_implemented">
 			<fill color="%semi_transparent%">
 				<placement x="0" y="0" w="%screen_width%" h="%screen_height%"/>
 			</fill>
@@ -912,7 +912,7 @@
 			</action>
 		</page>
 
-		<page name="multirom_nokexec_settings">
+		<page name="multirom_no_kexec_settings">
 			<fill color="%semi_transparent%">
 				<placement x="0" y="0" w="%screen_width%" h="%screen_height%"/>
 			</fill>
@@ -923,7 +923,7 @@
 
 			<listbox>
 				<placement x="%col1_x_left%" y="%row5_y%" w="%content_overlay_width%" h="%partitionlist_storage_height%"/>
-				<data name="tw_multirom_allow_nkk71_nokexec"/>
+				<data name="tw_multirom_no_kexec"/>
 				<listitem name="Use no-kexec only when needed">1</listitem>
 				<listitem name="... but also ask for confirmation before booting">2</listitem>
 				<listitem name="Ask whether to kexec or use no-kexec on booting">4</listitem>
@@ -933,12 +933,12 @@
 			<button>
 				<placement x="%col1_x_left%" y="%row5_y%" textplacement="6"/>
 				<font resource="font_m" color="%text_color%"/>
-				<condition var1="tw_multirom_allow_nkk71_nokexec" op="!=" var2="0"/>
+				<condition var1="tw_multirom_no_kexec" op="!=" var2="0"/>
 				<text>Enable no-kexec workaround</text>
 				<image resource="checkbox_true"/>
 				<actions>
 					<action function="overlay"/>
-					<action function="set">tw_multirom_allow_nkk71_nokexec=0</action>
+					<action function="set">tw_multirom_no_kexec=0</action>
 				</actions>
 			</button>
 
@@ -946,7 +946,7 @@
 				<placement x="%dialog_button_x%" y="%row5_y%"/> <!-- ideally (%row4a_y%+%row5_y%)/2 -->
 				<text>Info</text>
 				<actions>
-					<action function="page">multirom_nokexec_info</action>
+					<action function="page">multirom_no_kexec_info</action>
 				</actions>
 			</button>
 
@@ -955,19 +955,19 @@ not implemented
 			<button>
 				<placement x="%col1_x_left%" y="%row12a_y%" textplacement="6"/>
 				<font resource="font_m" color="%text_color%"/>
-				<condition var1="tw_multirom_allow_nkk71_nokexec_internal" op="==" var2="0"/>
+				<condition var1="tw_multirom_no_kexec_internal" op="==" var2="0"/>
 				<text>Allow kexec’ing into Internal</text>
 				<image resource="checkbox_false"/>
-				<action function="set">tw_multirom_allow_nkk71_nokexec_internal=1</action>
+				<action function="set">tw_multirom_no_kexec_internal=1</action>
 			</button>
 			<button>
 				<placement x="%col1_x_left%" y="%row12a_y%" textplacement="6"/>
 				<font resource="font_m" color="%text_color%"/>
-				<condition var1="tw_multirom_allow_nkk71_nokexec_internal" op="!=" var2="0"/>
+				<condition var1="tw_multirom_no_kexec_internal" op="!=" var2="0"/>
 				<text>Allow kexec’ing into Internal</text>
 				<image resource="checkbox_true"/>
 				<actions>
-					<action function="set">tw_multirom_allow_nkk71_nokexec_internal=0</action>
+					<action function="set">tw_multirom_no_kexec_internal=0</action>
 				</actions>
 			</button>
 -->
@@ -1038,7 +1038,7 @@ not implemented
 				<action function="screenshot"/>
 			</action>
 		</page>
-<!-- end of nkk71 nokexec overlays -->
+<!-- end of multirom no_kexec overlays -->
 
 		<page name="multirom_settings_autoboot">
 			<template name="page"/>

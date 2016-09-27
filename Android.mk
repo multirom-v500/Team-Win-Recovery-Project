@@ -109,7 +109,8 @@ LOCAL_C_INCLUDES += \
     system/vold \
     system/extras/ext4_utils \
     system/core/adb \
-    system/core/libsparse
+    system/core/libsparse \
+    external/zlib
 
 LOCAL_C_INCLUDES += bionic external/openssl/include $(LOCAL_PATH)/libmincrypt/includes
 ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 23; echo $$?),0)
@@ -120,7 +121,7 @@ LOCAL_STATIC_LIBRARIES :=
 LOCAL_SHARED_LIBRARIES :=
 
 LOCAL_STATIC_LIBRARIES += libguitwrp
-LOCAL_SHARED_LIBRARIES += libz libc libcutils libstdc++ libtar libblkid libminuitwrp libminadbd libmtdutils libminzip libaosprecovery
+LOCAL_SHARED_LIBRARIES += libz libc libcutils libstdc++ libtar libblkid libminuitwrp libminadbd libmtdutils libminzip libaosprecovery libtwadbbu
 LOCAL_SHARED_LIBRARIES += libcrecovery
 
 #MultiROM
@@ -189,6 +190,12 @@ LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
 #endif
 
 LOCAL_C_INCLUDES += system/extras/ext4_utils
+
+tw_git_revision := $(shell git -C $(LOCAL_PATH) rev-parse --short=8 HEAD 2>/dev/null)
+ifeq ($(shell git -C $(LOCAL_PATH) diff --quiet; echo $$?),1)
+    tw_git_revision := $(tw_git_revision)-dirty
+endif
+LOCAL_CFLAGS += -DTW_GIT_REVISION='"$(tw_git_revision)"'
 
 #TWRP Build Flags
 ifeq ($(TW_EXCLUDE_MTP),)
@@ -352,8 +359,24 @@ ifeq ($(TARGET_RECOVERY_IS_MULTIROM), true)
 #TODO
 LOCAL_CFLAGS += -DTW_DEFAULT_ROTATION=0
 
-    ifeq ($(MR_ALLOW_NKK71_NOKEXEC_WORKAROUND),true)
-        LOCAL_CFLAGS += -DMR_ALLOW_NKK71_NOKEXEC_WORKAROUND
+    MR_NO_KEXEC_MK_OPTIONS := true 1 allowed 2 enabled 3 ui_confirm 4 ui_choice 5 forced
+    ifneq (,$(filter $(MR_NO_KEXEC), $(MR_NO_KEXEC_MK_OPTIONS)))
+        ifneq (,$(filter $(MR_NO_KEXEC), true 1 allowed))
+            # NO_KEXEC_DISABLED    =  0x00,   // no-kexec workaround disabled
+            LOCAL_CFLAGS += -DMR_NO_KEXEC=0x00
+        else ifneq (,$(filter $(MR_NO_KEXEC), 2 enabled))
+            # NO_KEXEC_ALLOWED     =  0x01,   // "Use no-kexec only when needed"
+            LOCAL_CFLAGS += -DMR_NO_KEXEC=0x01
+        else ifneq (,$(filter $(MR_NO_KEXEC), 3 ui_confirm))
+            # NO_KEXEC_CONFIRM     =  0x02,   // "..... but also ask for confirmation"
+            LOCAL_CFLAGS += -DMR_NO_KEXEC=0x02
+        else ifneq (,$(filter $(MR_NO_KEXEC), 4 ui_choice))
+            # NO_KEXEC_CHOICE      =  0x04,   // "Ask whether to kexec or use no-kexec"
+            LOCAL_CFLAGS += -DMR_NO_KEXEC=0x04
+        else ifneq (,$(filter $(MR_NO_KEXEC), 5 forced))
+            # NO_KEXEC_FORCED      =  0x08,   // "Always force using no-kexec workaround"
+            LOCAL_CFLAGS += -DMR_NO_KEXEC=0x08
+        endif
     endif
 
     ifneq ($(MR_RD_ADDR),)
@@ -491,7 +514,7 @@ endif
 LOCAL_CFLAGS += -DTWRES=\"$(TWRES_PATH)\"
 LOCAL_CFLAGS += -DTWHTCD_PATH=\"$(TWHTCD_PATH)\"
 ifeq ($(TW_INCLUDE_NTFS_3G),true)
-ifeq ($(shell test $(CM_PLATFORM_SDK_VERSION) -ge 4; echo $$?),0)
+ifeq ($(shell test $(PLATFORM_SDK_VERSION) -gt 22; echo $$?),0)
     LOCAL_ADDITIONAL_DEPENDENCIES += \
         mount.ntfs \
         fsck.ntfs \
@@ -665,6 +688,7 @@ include $(commands_recovery_local_path)/injecttwrp/Android.mk \
     $(commands_recovery_local_path)/etc/Android.mk \
     $(commands_recovery_local_path)/toybox/Android.mk \
     $(commands_recovery_local_path)/simg2img/Android.mk \
+    $(commands_recovery_local_path)/adbbu/Android.mk \
     $(commands_recovery_local_path)/libpixelflinger/Android.mk
 
 #MultiROM

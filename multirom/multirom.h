@@ -55,7 +55,9 @@ enum
 #define INTERNAL_MEM_LOC_TXT "Internal memory"
 
 // Not defined in android includes?
+#ifndef MS_RELATIME
 #define MS_RELATIME (1<<21)
+#endif
 
 #define MAX_BASE_FOLDER_CNT 5
 
@@ -116,8 +118,8 @@ public:
 		int auto_boot_seconds;
 		int auto_boot_type;
 		std::string auto_boot_rom;
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-		int allow_nkk71_nokexec;
+#ifdef MR_NO_KEXEC
+		int no_kexec;
 #endif
 		int colors;
 		int brightness;
@@ -135,7 +137,7 @@ public:
 	static bool folderExists();
 	static std::string getRomsPath();
 	static std::string getPath();
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
+#ifdef MR_NO_KEXEC
 	static void nokexec_restore_primary_and_cleanup();
 #endif
 	static int getType(std::string name);

@@ -411,6 +411,11 @@ LOCAL_CFLAGS += -DTW_DEFAULT_ROTATION=0
             LOCAL_SRC_FILES += ../../$(MR_DEVICE_RECOVERY_HOOKS)
         endif
     endif
+
+    # Bump
+    ifeq ($(TARGET_REQUIRES_BUMP), true)
+        LOCAL_CFLAGS += -DTARGET_REQUIRES_BUMP
+    endif
 endif
 
 LOCAL_ADDITIONAL_DEPENDENCIES := \

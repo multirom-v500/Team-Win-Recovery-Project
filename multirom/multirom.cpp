@@ -1391,8 +1391,34 @@ bool MultiROM::injectBoot(std::string img_path, bool only_if_older)
 	if(tr_my_ver < 17)
 		return injectBootDeprecated(img_path, only_if_older);
 
+#ifndef TARGET_REQUIRES_BUMP
 	return system_args("\"%s/trampoline\" --inject=\"%s\" --mrom_dir=\"%s\" %s",
 		m_path.c_str(), img_path.c_str(), m_path.c_str(), only_if_older ? "" : "-f") == 0;
+#else
+	system_args("\"%s/trampoline\" --inject=\"%s\" --mrom_dir=\"%s\" %s",
+		m_path.c_str(), img_path.c_str(), m_path.c_str(), only_if_older ? "" : "-f");
+
+	gui_print("Bumping boot image...\n");
+
+	// Make working dir
+	system("mkdir /tmp/bump");
+	// Dump kernel to tmp
+	system_args("dd if=%s of=/tmp/bump/original-boot.img", img_path.c_str());
+	// Bump kernel
+	system("/sbin/livebump.sh");
+	// Clean up boot
+	system_args("dd if=/dev/zero of=%s bs=4096 count=4096", img_path.c_str());
+	// Flash back the bumped kernel
+	if(system_args("dd if=/tmp/bump/image_bumped.img of=%s", img_path.c_str()) != 0)
+	{
+		gui_print("Failed to flash kernel!");
+		return false;
+	}
+	// Cleanup
+	system("rm -rf /tmp/bump");
+	// If the kernel flashed we're good
+	return true;
+#endif
 }
 
 bool MultiROM::injectBootDeprecated(std::string img_path, bool only_if_older)
@@ -1482,6 +1508,11 @@ bool MultiROM::injectBootDeprecated(std::string img_path, bool only_if_older)
 		return false;
 	}
 	system("rm -r /tmp/boot");
+
+#ifdef TARGET_REQUIRES_BUMP
+	gui_print("Bumping boot image...\n");
+	system("/sbin/bumpimage.sh /tmp/newboot.img");
+#endif
 
 	if(img_path == m_boot_dev)
 		system_args("dd bs=4096 if=/tmp/newboot.img of=\"%s\"", m_boot_dev.c_str());

@@ -53,10 +53,8 @@ extern "C" {
 }
 #endif
 
-#ifdef HAVE_SELINUX
-#include "selinux/label.h"
+#include <selinux/label.h>
 struct selabel_handle *selinux_handle;
-#endif
 
 #ifdef TARGET_RECOVERY_IS_MULTIROM
 #include "multirom/multirom.h"
@@ -115,10 +113,10 @@ int main(int argc, char **argv) {
 	printf("Starting TWRP %s-%s on %s (pid %d)\n", TW_VERSION_STR, TW_GIT_REVISION, ctime(&StartupTime), getpid());
 
 #ifdef TARGET_RECOVERY_IS_MULTIROM
-#ifdef HAVE_SELINUX
 	printf("Setting SELinux to permissive\n");
 	TWFunc::write_file("/sys/fs/selinux/enforce", "0");
 
+	// TODO: file_contexts.bin
 	TWFunc::write_file("/file_contexts",
         "\n\n# MultiROM folders\n"
         "/data/media/multirom(/.*)?          <<none>>\n"
@@ -128,7 +126,6 @@ int main(int argc, char **argv) {
         "/sdcard/multirom(/.*)?              <<none>>\n"
         "/mnt/mrom(/.*)?                     <<none>>\n",
         "ae");
-#endif
 
 	// MultiROM _might_ have crashed the recovery while the boot device was redirected.
 	// It would be bad to let that as is.
@@ -170,7 +167,6 @@ int main(int argc, char **argv) {
 	// Load up all the resources
 	gui_loadResources();
 
-#ifdef HAVE_SELINUX
 	if (TWFunc::Path_Exists("/prebuilt_file_contexts")) {
 		if (TWFunc::Path_Exists("/file_contexts")) {
 			printf("Renaming regular /file_contexts -> /file_contexts.bak\n");
@@ -207,23 +203,18 @@ int main(int argc, char **argv) {
 			gui_msg("full_selinux=Full SELinux support is present.");
 		}
 	}
-#else
-	gui_warn("no_selinux=No SELinux support (no libselinux).");
-#endif
 
 	PartitionManager.Mount_By_Path("/cache", false);
 
-	bool Shutdown = false, Sideload = false;
+	bool Shutdown = false;
 	string Send_Intent = "";
 	{
 		TWPartition* misc = PartitionManager.Find_Partition_By_Path("/misc");
 		if (misc != NULL) {
 			if (misc->Current_File_System == "emmc") {
-				set_misc_device("emmc", misc->Actual_Block_Device.c_str());
-			} else if (misc->Current_File_System == "mtd") {
-				set_misc_device("mtd", misc->MTD_Name.c_str());
+				set_misc_device(misc->Actual_Block_Device);
 			} else {
-				LOGERR("Unknown file system for /misc\n");
+				LOGERR("Only emmc /misc is supported\n");
 			}
 		}
 		get_args(&argc, &argv);
@@ -291,7 +282,7 @@ int main(int argc, char **argv) {
 		printf("\n");
 	}
 
-	if(crash_counter == 0) {
+	if (crash_counter == 0) {
 		property_list(Print_Prop, NULL);
 		printf("\n");
 	} else {
@@ -358,7 +349,7 @@ int main(int argc, char **argv) {
 #endif //TARGET_RECOVERY_IS_MULTIROM
 
 	// Fixup the RTC clock on devices which require it
-	if(crash_counter == 0)
+	if (crash_counter == 0)
 		TWFunc::Fixup_Time_On_Boot();
 
 	// Run any outstanding OpenRecoveryScript

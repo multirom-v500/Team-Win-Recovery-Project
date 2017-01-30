@@ -51,7 +51,9 @@ extern "C" {
 #include "objects.hpp"
 #include "blanktimer.hpp"
 
-#define TW_THEME_VERSION 1
+// version 2 requires theme to handle power button as action togglebacklight
+#define TW_THEME_VERSION 2
+
 #define TW_THEME_VER_ERR -2
 
 extern int gGuiRunning;
@@ -71,6 +73,8 @@ std::vector<language_struct> Language_List;
 
 int tw_x_offset = 0;
 int tw_y_offset = 0;
+int tw_w_offset = 0;
+int tw_h_offset = 0;
 
 // Helper routine to convert a string to a color declaration
 int ConvertStrToColor(std::string str, COLOR* color)
@@ -895,16 +899,17 @@ int PageSet::LoadDetails(LoadingContext& ctx, xml_node<>* root)
 				}
 #endif
 				if (width != 0 && height != 0) {
-					float scale_w = ((float)gr_fb_width() - ((float)offx * 2.0)) / (float)width;
-					float scale_h = ((float)gr_fb_height() - ((float)offy * 2.0)) / (float)height;
+					float scale_w = (((float)gr_fb_width() + (float)tw_w_offset) - ((float)offx * 2.0)) / (float)width;
+					float scale_h = (((float)gr_fb_height() + (float)tw_h_offset) - ((float)offy * 2.0)) / (float)height;
 #ifdef TW_ROUND_SCREEN
-					float scale_off_w = (float)gr_fb_width() / (float)width;
-					float scale_off_h = (float)gr_fb_height() / (float)height;
+					float scale_off_w = ((float)gr_fb_width() + (float)tw_w_offset) / (float)width;
+					float scale_off_h = ((float)gr_fb_height() + (float)tw_h_offset) / (float)height;
 					tw_x_offset = offx * scale_off_w;
 					tw_y_offset = offy * scale_off_h;
 #endif
 					if (scale_w != 1 || scale_h != 1) {
-						LOGINFO("Scaling theme width %fx and height %fx, offsets x: %i y: %i\n", scale_w, scale_h, tw_x_offset, tw_y_offset);
+						LOGINFO("Scaling theme width %fx and height %fx, offsets x: %i y: %i w: %i h: %i\n",
+							scale_w, scale_h, tw_x_offset, tw_y_offset, tw_w_offset, tw_h_offset);
 						set_scale_values(scale_w, scale_h);
 					}
 				}
@@ -1006,7 +1011,7 @@ int PageSet::LoadVariables(xml_node<>* vars)
 		name = child->first_attribute("name");
 		value = child->first_attribute("value");
 		persist = child->first_attribute("persist");
-		if(name && value)
+		if (name && value)
 		{
 			if (strcmp(name->value(), "tw_x_offset") == 0) {
 				tw_x_offset = atoi(value->value());
@@ -1015,6 +1020,16 @@ int PageSet::LoadVariables(xml_node<>* vars)
 			}
 			if (strcmp(name->value(), "tw_y_offset") == 0) {
 				tw_y_offset = atoi(value->value());
+				child = child->next_sibling("variable");
+				continue;
+			}
+			if (strcmp(name->value(), "tw_w_offset") == 0) {
+				tw_w_offset = atoi(value->value());
+				child = child->next_sibling("variable");
+				continue;
+			}
+			if (strcmp(name->value(), "tw_h_offset") == 0) {
+				tw_h_offset = atoi(value->value());
 				child = child->next_sibling("variable");
 				continue;
 			}
@@ -1180,7 +1195,7 @@ char* PageManager::LoadFileToBuffer(std::string filename, ZipArchive* package) {
 		// We can try to load the XML directly...
 		LOGINFO("PageManager::LoadFileToBuffer loading filename: '%s' directly\n", filename.c_str());
 		struct stat st;
-		if(stat(filename.c_str(),&st) != 0) {
+		if (stat(filename.c_str(),&st) != 0) {
 			// This isn't always an error, sometimes we request files that don't exist.
 			return NULL;
 		}
@@ -1340,6 +1355,8 @@ int PageManager::LoadPackage(std::string name, std::string package, std::string 
 		LOGINFO("Load XML directly\n");
 		tw_x_offset = TW_X_OFFSET;
 		tw_y_offset = TW_Y_OFFSET;
+		tw_w_offset = TW_W_OFFSET;
+		tw_h_offset = TW_H_OFFSET;
 		if (name != "splash") {
 			LoadLanguageList(NULL);
 			languageFile = LoadFileToBuffer(TWRES "languages/en.xml", NULL);
@@ -1351,6 +1368,8 @@ int PageManager::LoadPackage(std::string name, std::string package, std::string 
 		LOGINFO("Loading zip theme\n");
 		tw_x_offset = 0;
 		tw_y_offset = 0;
+		tw_w_offset = 0;
+		tw_h_offset = 0;
 		if (!TWFunc::Path_Exists(package))
 			return -1;
 		if (sysMapFile(package.c_str(), &map) != 0) {
@@ -1454,7 +1473,7 @@ int PageManager::ReloadPackage(std::string name, std::string package)
 	if (iter == mPageSets.end())
 		return -1;
 
-	if(mMouseCursor)
+	if (mMouseCursor)
 		mMouseCursor->ResetData(gr_fb_width(), gr_fb_height());
 
 	PageSet* set = (*iter).second;
@@ -1572,18 +1591,18 @@ int PageManager::IsCurrentPage(Page* page)
 
 int PageManager::Render(void)
 {
-	if(blankTimer.isScreenOff())
+	if (blankTimer.isScreenOff())
 		return 0;
 
 	int res = (mCurrentSet ? mCurrentSet->Render() : -1);
-	if(mMouseCursor)
+	if (mMouseCursor)
 		mMouseCursor->Render();
 	return res;
 }
 
 HardwareKeyboard *PageManager::GetHardwareKeyboard()
 {
-	if(!mHardwareKeyboard)
+	if (!mHardwareKeyboard)
 		mHardwareKeyboard = new HardwareKeyboard();
 	return mHardwareKeyboard;
 }
@@ -1613,14 +1632,14 @@ xml_node<>* PageManager::FindStyle(std::string name)
 
 MouseCursor *PageManager::GetMouseCursor()
 {
-	if(!mMouseCursor)
+	if (!mMouseCursor)
 		mMouseCursor = new MouseCursor(gr_fb_width(), gr_fb_height());
 	return mMouseCursor;
 }
 
 void PageManager::LoadCursorData(xml_node<>* node)
 {
-	if(!mMouseCursor)
+	if (!mMouseCursor)
 		mMouseCursor = new MouseCursor(gr_fb_width(), gr_fb_height());
 
 	mMouseCursor->LoadData(node);
@@ -1628,7 +1647,7 @@ void PageManager::LoadCursorData(xml_node<>* node)
 
 int PageManager::Update(void)
 {
-	if(blankTimer.isScreenOff())
+	if (blankTimer.isScreenOff())
 		return 0;
 
 	if (RunReload())
@@ -1636,10 +1655,10 @@ int PageManager::Update(void)
 
 	int res = (mCurrentSet ? mCurrentSet->Update() : -1);
 
-	if(mMouseCursor)
+	if (mMouseCursor)
 	{
 		int c_res = mMouseCursor->Update();
-		if(c_res > res)
+		if (c_res > res)
 			res = c_res;
 	}
 	return res;

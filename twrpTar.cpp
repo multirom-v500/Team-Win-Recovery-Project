@@ -55,9 +55,9 @@ extern "C" {
 
 #ifdef TW_INCLUDE_FBE
 #include "crypto/ext4crypt/ext4crypt_tar.h"
-#define TWTAR_FLAGS TAR_GNU | TAR_STORE_SELINUX | TAR_STORE_POSIX_CAP |TAR_STORE_EXT4_POL
+#define TWTAR_FLAGS TAR_GNU | TAR_STORE_SELINUX | TAR_STORE_POSIX_CAP | TAR_STORE_ANDROID_USER_XATTR |TAR_STORE_EXT4_POL
 #else
-#define TWTAR_FLAGS TAR_GNU | TAR_STORE_SELINUX | TAR_STORE_POSIX_CAP
+#define TWTAR_FLAGS TAR_GNU | TAR_STORE_SELINUX | TAR_STORE_POSIX_CAP | TAR_STORE_ANDROID_USER_XATTR
 #endif
 
 using namespace std;
@@ -67,7 +67,6 @@ twrpTar::twrpTar(void) {
 	userdata_encryption = 0;
 	use_compression = 0;
 	split_archives = 0;
-	has_data_media = 0;
 	pigz_pid = 0;
 	oaes_pid = 0;
 	Total_Backup_Size = 0;

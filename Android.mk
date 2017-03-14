@@ -317,6 +317,12 @@ ifeq ($(TW_INCLUDE_CRYPTO), true)
         LOCAL_CFLAGS += -DTW_INCLUDE_FBE
         LOCAL_SHARED_LIBRARIES += libe4crypt
     endif
+    ifneq ($(TW_CRYPTO_USE_SYSTEM_VOLD),)
+    ifneq ($(TW_CRYPTO_USE_SYSTEM_VOLD),false)
+        LOCAL_CFLAGS += -DTW_CRYPTO_USE_SYSTEM_VOLD
+        LOCAL_STATIC_LIBRARIES += libvolddecrypt
+    endif
+    endif
 endif
 WITH_CRYPTO_UTILS := \
     $(if $(wildcard system/core/libcrypto_utils/Android.mk),true)
@@ -377,7 +383,11 @@ ifeq ($(TARGET_RECOVERY_IS_MULTIROM), true)
 
     LOCAL_CFLAGS += -DTARGET_DEVICE="\"$(TARGET_DEVICE)\""
 
-    LOCAL_CFLAGS += -DMR_REC_VERSION="\"$(MR_REC_VERSION)\""
+    ifneq ($(MR_REC_VERSION),)
+        LOCAL_CFLAGS += -DMR_REC_VERSION="\"$(MR_REC_VERSION)\""
+    else
+        LOCAL_CFLAGS += -DMR_REC_VERSION="\"$(shell date -u +%Y%m%d)\""
+    endif
 
 #TODO
 LOCAL_CFLAGS += -DTW_DEFAULT_ROTATION=0
@@ -570,20 +580,32 @@ ifeq ($(shell test $(CM_PLATFORM_SDK_VERSION) -ge 3; echo $$?),0)
 endif
 endif
 
+ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 25; echo $$?),0)
+    LOCAL_ADDITIONAL_DEPENDENCIES += file_contexts_text
+endif
+
 ifeq ($(BOARD_CACHEIMAGE_PARTITION_SIZE),)
 LOCAL_REQUIRED_MODULES := recovery-persist recovery-refresh
 endif
 
 include $(BUILD_EXECUTABLE)
 
+# Symlink for file_contexts
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := file_contexts_text
+LOCAL_MODULE_TAGS := optional
+LOCAL_REQUIRED_MODULES := file_contexts.bin
+LOCAL_POST_INSTALL_CMD := \
+    $(hide) cp -f $(OUT)/obj/ETC/file_contexts.bin_intermediates/file_contexts.concat.tmp $(TARGET_RECOVERY_ROOT_OUT)/file_contexts
+
+include $(BUILD_PHONY_PACKAGE)
+
 ifneq ($(TW_USE_TOOLBOX), true)
 include $(CLEAR_VARS)
 # Create busybox symlinks... gzip and gunzip are excluded because those need to link to pigz instead
 BUSYBOX_LINKS := $(shell cat external/busybox/busybox-full.links)
 exclude := tune2fs mke2fs mkdosfs mkfs.vfat gzip gunzip
-ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 24; echo $$?),0)
-    exclude += sh
-endif
 
 # Having /sbin/modprobe present on 32 bit devices with can cause a massive
 # performance problem if the kernel has CONFIG_MODULES=y
@@ -703,10 +725,6 @@ ifeq ($(AB_OTA_UPDATER),true)
     LOCAL_CFLAGS += -DAB_OTA_UPDATER=1
 endif
 
-ifneq ($(BOARD_RECOVERY_BLDRMSG_OFFSET),)
-    LOCAL_CFLAGS += -DBOARD_RECOVERY_BLDRMSG_OFFSET=$(BOARD_RECOVERY_BLDRMSG_OFFSET)
-endif
-
 include $(BUILD_SHARED_LIBRARY)
 
 # All the APIs for testing
@@ -768,7 +786,8 @@ include $(commands_recovery_local_path)/injecttwrp/Android.mk \
     $(commands_recovery_local_path)/toybox/Android.mk \
     $(commands_recovery_local_path)/simg2img/Android.mk \
     $(commands_recovery_local_path)/adbbu/Android.mk \
-    $(commands_recovery_local_path)/libpixelflinger/Android.mk
+    $(commands_recovery_local_path)/libpixelflinger/Android.mk \
+    $(commands_recovery_local_path)/attr/Android.mk
 
 #MultiROM
 ifeq ($(TARGET_RECOVERY_IS_MULTIROM), true)
@@ -786,6 +805,11 @@ ifeq ($(TW_INCLUDE_CRYPTO), true)
     include $(commands_recovery_local_path)/crypto/scrypt/Android.mk
     ifeq ($(TW_INCLUDE_CRYPTO_FBE), true)
         include $(commands_recovery_local_path)/crypto/ext4crypt/Android.mk
+    endif
+    ifneq ($(TW_CRYPTO_USE_SYSTEM_VOLD),)
+    ifneq ($(TW_CRYPTO_USE_SYSTEM_VOLD),false)
+        include $(commands_recovery_local_path)/crypto/vold_decrypt/Android.mk
+    endif
     endif
     include $(commands_recovery_local_path)/gpt/Android.mk
 endif

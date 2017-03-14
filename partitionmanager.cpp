@@ -65,6 +65,9 @@ extern "C" {
 	#ifdef TW_INCLUDE_FBE
 		#include "crypto/ext4crypt/Decrypt.h"
 	#endif
+	#ifdef TW_CRYPTO_USE_SYSTEM_VOLD
+		#include "crypto/vold_decrypt/vold_decrypt.h"
+	#endif
 #endif
 
 #ifdef AB_OTA_UPDATER
@@ -1587,7 +1590,7 @@ void TWPartitionManager::Post_Decrypt(const string& Block_Device) {
 
 int TWPartitionManager::Decrypt_Device(string Password) {
 #ifdef TW_INCLUDE_CRYPTO
-	char crypto_state[PROPERTY_VALUE_MAX], crypto_blkdev[PROPERTY_VALUE_MAX], cPassword[255];
+	char crypto_state[PROPERTY_VALUE_MAX], crypto_blkdev[PROPERTY_VALUE_MAX];
 	std::vector<TWPartition*>::iterator iter;
 
 	// Mount any partitions that need to be mounted for decrypt
@@ -1623,8 +1626,31 @@ int TWPartitionManager::Decrypt_Device(string Password) {
 		return -1;
 	}
 
-	strcpy(cPassword, Password.c_str());
-	int pwret = cryptfs_check_passwd(cPassword);
+	int pwret = -1;
+	pid_t pid = fork();
+	if (pid < 0) {
+		LOGERR("fork failed\n");
+		return -1;
+	} else if (pid == 0) {
+		// Child process
+		char cPassword[255];
+		strcpy(cPassword, Password.c_str());
+		int ret = cryptfs_check_passwd(cPassword);
+		exit(ret);
+	} else {
+		// Parent
+		int status;
+		if (TWFunc::Wait_For_Child_Timeout(pid, &status, "Decrypt", 30))
+			pwret = -1;
+		else
+			pwret = WEXITSTATUS(status) ? -1 : 0;
+	}
+
+#ifdef TW_CRYPTO_USE_SYSTEM_VOLD
+	if (pwret != 0) {
+		pwret = vold_decrypt(Password);
+	}
+#endif // TW_CRYPTO_USE_SYSTEM_VOLD
 
 	// Unmount any partitions that were needed for decrypt
 	for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
@@ -1711,11 +1737,9 @@ int TWPartitionManager::Open_Lun_File(string Partition_Path, string Lun_File) {
 }
 
 int TWPartitionManager::usb_storage_enable(void) {
-	int has_data_media;
 	char lun_file[255];
 	bool has_multiple_lun = false;
 
-	DataManager::GetValue(TW_HAS_DATA_MEDIA, has_data_media);
 	string Lun_File_str = CUSTOM_LUN_FILE;
 	size_t found = Lun_File_str.find("%");
 	if (found != string::npos) {
@@ -2227,8 +2251,6 @@ bool TWPartitionManager::Enable_MTP(void) {
 		gui_err("mtp_already_enabled=MTP already enabled");
 		return true;
 	}
-	//Launch MTP Responder
-	LOGINFO("Starting MTP\n");
 
 	int mtppipe[2];
 
@@ -2238,8 +2260,8 @@ bool TWPartitionManager::Enable_MTP(void) {
 	}
 
 	char old_value[PROPERTY_VALUE_MAX];
-	property_get("sys.usb.config", old_value, "error");
-	if (strcmp(old_value, "error") != 0 && strcmp(old_value, "mtp,adb") != 0) {
+	property_get("sys.usb.config", old_value, "");
+	if (strcmp(old_value, "mtp,adb") != 0) {
 		char vendor[PROPERTY_VALUE_MAX];
 		char product[PROPERTY_VALUE_MAX];
 		property_set("sys.usb.config", "none");
@@ -2251,7 +2273,7 @@ bool TWPartitionManager::Enable_MTP(void) {
 		TWFunc::write_file("/sys/class/android_usb/android0/idProduct", productstr);
 		property_set("sys.usb.config", "mtp,adb");
 	}
-	/* To enable MTP debug, use the twrp command line feature to
+	/* To enable MTP debug, use the twrp command line feature:
 	 * twrp set tw_mtp_debug 1
 	 */
 	twrpMtp *mtp = new twrpMtp(DataManager::GetIntValue("tw_mtp_debug"));
@@ -2293,13 +2315,13 @@ void TWPartitionManager::Add_All_MTP_Storage(void) {
 
 bool TWPartitionManager::Disable_MTP(void) {
 	char old_value[PROPERTY_VALUE_MAX];
-	property_get("sys.usb.config", old_value, "error");
+	property_get("sys.usb.config", old_value, "");
 	if (strcmp(old_value, "adb") != 0) {
 		char vendor[PROPERTY_VALUE_MAX];
 		char product[PROPERTY_VALUE_MAX];
 		property_set("sys.usb.config", "none");
 		property_get("usb.vendor", vendor, "18D1");
-		property_get("usb.product.adb", product, "D002");
+		property_get("usb.product.adb", product, "D001");
 		string vendorstr = vendor;
 		string productstr = product;
 		TWFunc::write_file("/sys/class/android_usb/android0/idVendor", vendorstr);
@@ -2652,12 +2674,28 @@ void TWPartitionManager::Translate_Partition(const char* path, const char* resou
 	TWPartition* part = PartitionManager.Find_Partition_By_Path(path);
 	if (part) {
 		if (part->Is_Adopted_Storage) {
+			part->Backup_Display_Name = part->Display_Name + " - " + gui_lookup("data_backup", "Data (excl. storage)");
 			part->Display_Name = part->Display_Name + " - " + gui_lookup("data", "Data");
-			part->Backup_Display_Name = part->Display_Name;
 			part->Storage_Name = part->Storage_Name + " - " + gui_lookup("adopted_storage", "Adopted Storage");
 		} else {
 			part->Display_Name = gui_lookup(resource_name, default_value);
 			part->Backup_Display_Name = part->Display_Name;
+			if (part->Is_Storage)
+				part->Storage_Name = gui_lookup(storage_resource_name, storage_default_value);
+		}
+	}
+}
+
+void TWPartitionManager::Translate_Partition(const char* path, const char* resource_name, const char* default_value, const char* storage_resource_name, const char* storage_default_value, const char* backup_name, const char* backup_default) {
+	TWPartition* part = PartitionManager.Find_Partition_By_Path(path);
+	if (part) {
+		if (part->Is_Adopted_Storage) {
+			part->Backup_Display_Name = part->Display_Name + " - " + gui_lookup(backup_name, backup_default);
+			part->Display_Name = part->Display_Name + " - " + gui_lookup("data", "Data");
+			part->Storage_Name = part->Storage_Name + " - " + gui_lookup("adopted_storage", "Adopted Storage");
+		} else {
+			part->Display_Name = gui_lookup(resource_name, default_value);
+			part->Backup_Display_Name = gui_lookup(backup_name, backup_default);
 			if (part->Is_Storage)
 				part->Storage_Name = gui_lookup(storage_resource_name, storage_default_value);
 		}
@@ -2671,17 +2709,19 @@ void TWPartitionManager::Translate_Partition_Display_Names() {
 	Translate_Partition("/vendor", "vendor", "Vendor");
 	Translate_Partition("/vendor_image", "vendor_image", "Vendor Image");
 	Translate_Partition("/cache", "cache", "Cache");
-	Translate_Partition("/data", "data", "Data", "internal", "Internal Storage");
 	Translate_Partition("/boot", "boot", "Boot");
 	Translate_Partition("/recovery", "recovery", "Recovery");
 	if (!datamedia) {
+		Translate_Partition("/data", "data", "Data", "internal", "Internal Storage");
 		Translate_Partition("/sdcard", "sdcard", "SDCard", "sdcard", "SDCard");
 		Translate_Partition("/internal_sd", "sdcard", "SDCard", "sdcard", "SDCard");
 		Translate_Partition("/internal_sdcard", "sdcard", "SDCard", "sdcard", "SDCard");
 		Translate_Partition("/emmc", "sdcard", "SDCard", "sdcard", "SDCard");
+	} else {
+		Translate_Partition("/data", "data", "Data", "internal", "Internal Storage", "data_backup", "Data (excl. storage)");
 	}
-	Translate_Partition("/external_sd", "microsd", "Micro SDCard", "microsd", "Micro SDCard");
-	Translate_Partition("/external_sdcard", "microsd", "Micro SDCard", "microsd", "Micro SDCard");
+	Translate_Partition("/external_sd", "microsd", "Micro SDCard", "microsd", "Micro SDCard", "data_backup", "Data (excl. storage)");
+	Translate_Partition("/external_sdcard", "microsd", "Micro SDCard", "microsd", "Micro SDCard", "data_backup", "Data (excl. storage)");
 	Translate_Partition("/usb-otg", "usbotg", "USB OTG", "usbotg", "USB OTG");
 	Translate_Partition("/sd-ext", "sdext", "SD-EXT");
 
